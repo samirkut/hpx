@@ -1,0 +1,8 @@
+github.com/elazarl/goproxy v0.0.0-20220901064549-fbd10ff4f5a1 h1:ecIiM5NYeEOhy5trm8xel6wpUhYH+QWteUKnwcbCMl4=
+github.com/elazarl/goproxy v0.0.0-20220901064549-fbd10ff4f5a1/go.mod h1:Ro8st/ElPeALwNFlcTpWmkr6IoMFfkjXAvTHpevnDsM=
+github.com/elazarl/goproxy/ext v0.0.0-20190711103511-473e67f1d7d2/go.mod h1:gNh8nYJoAm43RfaxurUnxr+N1PwuFV3ZMl/efxlIlY8=
+github.com/rapid7/go-get-proxied v0.0.0-20220112221009-42bdac6386fc h1:GYtNW8Vb2/jVoyx5LxowvoTHTk5ZE4Sgk5UZqhUo/U8=
+github.com/rapid7/go-get-proxied v0.0.0-20220112221009-42bdac6386fc/go.mod h1:ELOKvSUbHx1oVeecsknc02S0eEAFD+TdV3rTt3BcNzM=
+github.com/rogpeppe/go-charset v0.0.0-20180617210344-2471d30d28b4/go.mod h1:qgYeAmZ5ZIpBWTGllZSQnw97Dj+woV0toclVaRGI8pc=
+golang.org/x/sys v0.0.0-20221006211917-84dc82d7e875 h1:AzgQNqF+FKwyQ5LbVrVqOcuuFB67N47F9+htZYH0wFM=
+golang.org/x/sys v0.0.0-20221006211917-84dc82d7e875/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
