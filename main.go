@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/elazarl/goproxy"
 	"github.com/rapid7/go-get-proxied/proxy"
@@ -20,22 +20,7 @@ func main() {
 
 	gpx := goproxy.NewProxyHttpServer()
 	gpx.Verbose = true
-	gpx.ConnectDialWithReq = func(req *http.Request, network, addr string) (net.Conn, error) {
-		upstreamProxy, err := GetSystemProxy(req.URL)
-		if err != nil {
-			return nil, err
-		}
-
-		if upstreamProxy == "" {
-			if gpx.Tr.Dial != nil {
-				return gpx.Tr.Dial(network, addr)
-			}
-			return net.Dial(network, addr)
-		}
-
-		fn := gpx.NewConnectDialToProxy(upstreamProxy)
-		return fn(network, addr)
-	}
+	gpx.Tr.Proxy = getSystemProxy
 
 	addr := fmt.Sprintf("localhost:%d", *portPtr)
 	log.Printf("Listening on %s", addr)
@@ -46,15 +31,27 @@ func main() {
 
 var provider = proxy.NewProvider("")
 
-func GetSystemProxy(targetURL *url.URL) (string, error) {
-	log.Printf("Get proxy for %s", targetURL)
+func getSystemProxy(req *http.Request) (*url.URL, error) {
+	log.Printf("Get proxy for %s", req.RequestURI)
 
-	proxy := provider.GetProxy(targetURL.Scheme, targetURL.String())
+	scheme := req.URL.Scheme
+	if scheme == "" {
+		arr := strings.Split(req.RequestURI, ":")
+		if len(arr) > 0 {
+			scheme = arr[0]
+		}
+	}
+
+	if scheme == "" {
+		scheme = "http"
+	}
+
+	proxy := provider.GetProxy(scheme, req.RequestURI)
 	if proxy == nil {
 		log.Println("Using direct connection")
-		return "", nil // no proxy
+		return nil, nil // no proxy
 	}
 
 	log.Printf("Using %s", proxy.URL())
-	return proxy.URL().String(), nil
+	return proxy.URL(), nil
 }
