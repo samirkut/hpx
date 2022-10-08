@@ -21,7 +21,7 @@ func main() {
 	gpx := goproxy.NewProxyHttpServer()
 	gpx.Verbose = true
 	gpx.ConnectDialWithReq = func(req *http.Request, network, addr string) (net.Conn, error) {
-		upstreamProxy, err := GetSystemProxy(req.RequestURI)
+		upstreamProxy, err := GetSystemProxy(req.URL)
 		if err != nil {
 			return nil, err
 		}
@@ -46,14 +46,10 @@ func main() {
 
 var provider = proxy.NewProvider("")
 
-func GetSystemProxy(targetUrl string) (string, error) {
-	log.Printf("Get proxy for %s", targetUrl)
-	u, err := url.Parse(targetUrl)
-	if err != nil {
-		return "", err
-	}
+func GetSystemProxy(targetURL *url.URL) (string, error) {
+	log.Printf("Get proxy for %s", targetURL)
 
-	proxy := provider.GetProxy(u.Scheme, targetUrl)
+	proxy := provider.GetProxy(targetURL.Scheme, targetURL.String())
 	if proxy == nil {
 		log.Println("Using direct connection")
 		return "", nil // no proxy
