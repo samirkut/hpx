@@ -1,57 +1,99 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
-	"strings"
+	"os"
+	"time"
 
 	"github.com/elazarl/goproxy"
-	"github.com/rapid7/go-get-proxied/proxy"
+	"golang.org/x/term"
 )
 
 func main() {
+	var err error
+	var verbose bool
+	var proxyServer string
+	var listenAddr string
 
-	var portPtr = flag.Int("port", 8080, "proxy port")
+	var proxyURL *url.URL
+	var useNtlmAuth bool
+	var proxyUsername, proxyPassword, proxyDomain string
+
+	flag.BoolVar(&verbose, "verbose", false, "verbose mode")
+
+	flag.StringVar(&proxyServer, "proxy", "", "cascading proxy server")
+	flag.BoolVar(&useNtlmAuth, "ntlm", false, "use ntlm auth")
+	flag.StringVar(&listenAddr, "addr", "localhost:8080", "proxy listen addr")
+
+	flag.StringVar(&proxyUsername, "user", "", "username for proxy auth")
+	flag.StringVar(&proxyDomain, "domain", "", "domain for proxy auth")
+	flag.StringVar(&proxyPassword, "password", "", "password for proxy auth")
 
 	flag.Parse()
 
+	if verbose {
+		debugf = verboseDebug
+	}
+
+	if useNtlmAuth {
+		if proxyUsername != "" && proxyPassword == "" {
+			//prompt for password if username is provided but not the password
+			fmt.Print("Password: ")
+
+			var data []byte
+			data, err = term.ReadPassword(int(os.Stdin.Fd()))
+			if err != nil {
+				log.Fatal(err)
+			}
+			proxyPassword = string(data)
+		}
+	}
+
+	proxyURL, err = url.Parse(proxyServer)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	gpx := goproxy.NewProxyHttpServer()
 	gpx.Verbose = true
-	gpx.Tr.Proxy = getSystemProxy
+	gpx.Tr.DialContext = NewDialContext(proxyURL, useNtlmAuth, proxyUsername, proxyPassword, proxyDomain)
 
-	addr := fmt.Sprintf("localhost:%d", *portPtr)
-	log.Printf("Listening on %s", addr)
-	if err := http.ListenAndServe(addr, gpx); err != nil {
+	log.Printf("Listening on %s", listenAddr)
+	if err = http.ListenAndServe(listenAddr, gpx); err != nil {
 		log.Fatal(err)
 	}
 }
 
-var provider = proxy.NewProvider("")
+func NewDialContext(proxyURL *url.URL, useNtlmAuth bool, proxyUsername, proxyPassword, proxyDomain string) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
 
-func getSystemProxy(req *http.Request) (*url.URL, error) {
-	log.Printf("Get proxy for %s", req.RequestURI)
-
-	scheme := req.URL.Scheme
-	if scheme == "" {
-		arr := strings.Split(req.RequestURI, ":")
-		if len(arr) > 0 {
-			scheme = arr[0]
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialProxy := func() (net.Conn, error) {
+			debugf("ntlm> Will connect to proxy at " + proxyURL.Host)
+			if proxyURL.Scheme == "https" {
+				return tls.DialWithDialer(dialer, "tcp", proxyURL.Host, nil)
+			}
+			return dialer.DialContext(ctx, network, proxyURL.Host)
 		}
-	}
 
-	if scheme == "" {
-		scheme = "http"
-	}
+		if !useNtlmAuth {
+			return dialProxy()
+		}
 
-	proxy := provider.GetProxy(scheme, req.RequestURI)
-	if proxy == nil {
-		log.Println("Using direct connection")
-		return nil, nil // no proxy
-	}
+		if proxyUsername == "" {
+			return dialAndNegotiateAuto(addr, dialProxy)
+		}
 
-	log.Printf("Using %s", proxy.URL())
-	return proxy.URL(), nil
+		return dialAndNegotiate(addr, proxyUsername, proxyPassword, proxyDomain, dialProxy)
+	}
 }
