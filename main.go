@@ -63,7 +63,11 @@ func main() {
 
 	gpx := goproxy.NewProxyHttpServer()
 	gpx.Verbose = true
-	gpx.Tr.DialContext = NewDialContext(proxyURL, useNtlmAuth, proxyUsername, proxyPassword, proxyDomain)
+
+	if proxyServer != "" {
+		gpx.Tr.DialContext = NewDialContext(proxyURL, useNtlmAuth, proxyUsername, proxyPassword, proxyDomain)
+		gpx.ConnectDial = NewConnectDial(proxyURL, useNtlmAuth, proxyUsername, proxyPassword, proxyDomain)
+	}
 
 	log.Printf("Listening on %s", listenAddr)
 	if err = http.ListenAndServe(listenAddr, gpx); err != nil {
@@ -84,6 +88,33 @@ func NewDialContext(proxyURL *url.URL, useNtlmAuth bool, proxyUsername, proxyPas
 				return tls.DialWithDialer(dialer, "tcp", proxyURL.Host, nil)
 			}
 			return dialer.DialContext(ctx, network, proxyURL.Host)
+		}
+
+		if !useNtlmAuth {
+			return dialProxy()
+		}
+
+		if proxyUsername == "" {
+			return dialAndNegotiateAuto(addr, dialProxy)
+		}
+
+		return dialAndNegotiate(addr, proxyUsername, proxyPassword, proxyDomain, dialProxy)
+	}
+}
+
+func NewConnectDial(proxyURL *url.URL, useNtlmAuth bool, proxyUsername, proxyPassword, proxyDomain string) func(network, addr string) (net.Conn, error) {
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	return func(network, addr string) (net.Conn, error) {
+		dialProxy := func() (net.Conn, error) {
+			debugf("ntlm> Will connect to proxy at " + proxyURL.Host)
+			if proxyURL.Scheme == "https" {
+				return tls.DialWithDialer(dialer, "tcp", proxyURL.Host, nil)
+			}
+			return dialer.Dial(network, proxyURL.Host)
 		}
 
 		if !useNtlmAuth {
